@@ -465,7 +465,14 @@ if __name__ == "__main__":
     os.makedirs(eval_log_dir, exist_ok=True)
     train_log_dir = os.path.join(args.output_dir, 'training_logs')
     os.makedirs(train_log_dir, exist_ok=True)
+    model_dir = os.path.join(args.output_dir, 'models')
+    os.makedirs(model_dir, exist_ok=True)
 
+    # Save original model
+    original_model_path = os.path.join(model_dir, 'original_model')
+    base_model.save_pretrained(original_model_path)
+    tokenizer.save_pretrained(original_model_path)
+    print(f"Saved original model to {original_model_path}")
 
     # Setup optimizer for trainer agent with GRPO config settings
     optimizer = torch.optim.AdamW(
@@ -543,4 +550,17 @@ if __name__ == "__main__":
         train_metrics_total[round_num] = train_metrics
         with open(os.path.join(train_log_dir, "train_logs.json"), "w") as f:
             json.dump(train_metrics_total, f, indent=4)
-       
+
+        # Save model checkpoint
+        if (round_num + 1) % args.save_steps == 0:
+            checkpoint_path = os.path.join(model_dir, f'checkpoint_{round_num}')
+            model.save_pretrained(checkpoint_path)
+            tokenizer.save_pretrained(checkpoint_path)
+            print(f"Saved checkpoint {round_num} to {checkpoint_path}")
+
+    # Save final model
+    final_model_path = os.path.join(model_dir, 'final_model')
+    model.save_pretrained(final_model_path)
+    tokenizer.save_pretrained(final_model_path)
+    print(f"Saved final model to {final_model_path}")
+   
