@@ -517,6 +517,12 @@ if __name__ == "__main__":
                     'metrics': eval_metrics,
                     'accuracy': eval_accuracy
                 }, f, indent=4)
+            
+            # Save intermediate model (overwrite each time)
+            intermediate_model_path = os.path.join(model_dir, 'intermediate_model')
+            model.save_pretrained(intermediate_model_path)
+            tokenizer.save_pretrained(intermediate_model_path)
+            print(f"Saved intermediate model to {intermediate_model_path}")
 
         # Slowly update ref model
         if args.update_ref_model and (round_num+1) % args.update_ref_model_freq == 0:
