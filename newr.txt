@@ -1,0 +1,7 @@
+torch
+transformers
+datasets
+numpy
+tqdm
+matplotlib
+hf_xet
