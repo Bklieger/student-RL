@@ -58,3 +58,6 @@ I'm really pleased to see how well the key mechanics work even in this simplifie
 
 
 
+```
+python main.py --output_dir "final1" --verbose --num_train_iters 10  --eval_iterations 1 --save_steps 1000
+```
