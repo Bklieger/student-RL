@@ -57,6 +57,24 @@ I'm really pleased to see how well the key mechanics work even in this simplifie
 4. I'd like to do all this experimentation in this framework, so I need to make things faster, and support multi-gpu training.
 
 
+## Setup
+
+Base image: runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+
+Machine: H or earlier
+
+Run:
+```
+python3 -m venv venv
+```
+
+```
+source venv/bin/activate
+```
+
+```
+pip3 install -r newr.txt
+```
 
 ```
 python main.py --output_dir "final1" --verbose --num_train_iters 10  --eval_iterations 1 --save_steps 1000
