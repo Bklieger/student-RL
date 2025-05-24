@@ -22,8 +22,8 @@ def load_model_and_tokenizer(model_path: str, device: str):
     
     return model, tokenizer
 
-def generate_response(model, tokenizer, prompt: str, device: str, max_length: int = 786):
-    """Generate a response from the model."""
+def generate_response(model, tokenizer, prompt: str, device: str, max_length: int = 786, n_samples: int = 1):
+    """Generate n responses from the model."""
     # Format prompt
     formatted_prompt = [
         {'role': 'system', 'content': 'You are a helpful AI assistant.'},
@@ -41,12 +41,16 @@ def generate_response(model, tokenizer, prompt: str, device: str, max_length: in
             max_new_tokens=max_length,
             do_sample=True,
             temperature=0.9,
-            pad_token_id=tokenizer.pad_token_id
+            pad_token_id=tokenizer.pad_token_id,
+            num_return_sequences=n_samples
         )
     
     # Decode
-    response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-    return response
+    responses = []
+    for i in range(n_samples):
+        response = tokenizer.decode(outputs[i][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+        responses.append(response)
+    return responses
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Compare original and fine-tuned model outputs")
@@ -55,6 +59,7 @@ def parse_args():
     parser.add_argument("--prompt_file", type=str, help="File containing prompts to test (one per line)")
     parser.add_argument("--max_length", type=int, default=786, help="Maximum length of generated response")
     parser.add_argument("--output_file", type=str, help="File to save comparison results")
+    parser.add_argument("--n", type=int, default=1, help="Number of samples to generate per prompt")
     return parser.parse_args()
 
 def main():
@@ -87,26 +92,16 @@ def main():
     # Generate and compare responses
     results = []
     for prompt in tqdm(prompts, desc="Generating responses"):
-        print("\n" + "="*50)
-        print(f"Prompt: {prompt}")
         
         # Get responses
-        original_response = generate_response(original_model, original_tokenizer, prompt, device, args.max_length)
-        final_response = generate_response(final_model, final_tokenizer, prompt, device, args.max_length)
-        
-        # Print results
-        print("\nOriginal Model Response:")
-        print("-"*30)
-        print(original_response)
-        print("\nFine-tuned Model Response:")
-        print("-"*30)
-        print(final_response)
+        original_responses = generate_response(original_model, original_tokenizer, prompt, device, args.max_length, args.n)
+        final_responses = generate_response(final_model, final_tokenizer, prompt, device, args.max_length, args.n)
         
         # Store results
         results.append({
             "prompt": prompt,
-            "original_response": original_response,
-            "fine_tuned_response": final_response
+            "original_responses": original_responses,
+            "fine_tuned_responses": final_responses
         })
     
     # Save results if output file specified
@@ -117,3 +112,5 @@ def main():
 
 if __name__ == "__main__":
     main() 
+
+# python compare_models.py --output_dir final1 --prompt "Reason about something with the proper format with <reasoning> and <answer>" --output_file results.json --n 10
