@@ -91,10 +91,12 @@ class GSM8kEvaluator(RewardEvaluator):
     - Integer format validation
     - XML formatting (strict and soft)
     - XML tag counting
+    - Math tag validation
+    - Math tag presence
     """
     
     def __init__(self):
-        self.num_reward_functions = 5
+        self.num_reward_functions = 7
     
     def _extract_xml_answer(self, text: str) -> str:
         """Extract answer from XML tags."""
@@ -116,24 +118,24 @@ class GSM8kEvaluator(RewardEvaluator):
 
     def _strict_format_reward(self, completions) -> List[float]:
         """Reward for strict XML format."""
-        pattern = r"^<reasoning>\n.*?\n</reasoning>\n<answer>\n.*?\n</answer>\n$"
+        pattern = r".*<answer>([0-9+\-*/()\s.]*)</answer>"
         responses = [completion[0]["content"] for completion in completions]
-        matches = [bool(re.match(pattern, r)) for r in responses]
+        matches = [bool(re.search(pattern, r)) for r in responses]
         return [0.5 if m else 0.0 for m in matches]
 
     def _soft_format_reward(self, completions) -> List[float]:
         """Reward for relaxed XML format."""
-        pattern = r"<reasoning>.*?</reasoning>\s*<answer>.*?</answer>"
+        pattern = r".*<answer>.*?</answer>"
         responses = [completion[0]["content"] for completion in completions]
-        matches = [bool(re.match(pattern, r)) for r in responses]
+        matches = [bool(re.search(pattern, r)) for r in responses]
         return [0.5 if m else 0.0 for m in matches]
 
     def _xml_count_reward(self, completions) -> List[float]:
         """Reward for XML tag counting."""
         def count_xml(text: str) -> float:
             count = 0.0
-            if text.count("<reasoning>\n") == 1: count += 0.125
-            if text.count("\n</reasoning>\n") == 1: count += 0.125
+            if text.count("<math>\n") == 1: count += 0.125
+            if text.count("\n</math>\n") == 1: count += 0.125
             if text.count("\n<answer>\n") == 1:
                 count += 0.125
                 count -= len(text.split("\n</answer>\n")[-1])*0.001
@@ -144,6 +146,35 @@ class GSM8kEvaluator(RewardEvaluator):
             
         responses = [completion[0]["content"] for completion in completions]
         return [count_xml(r) for r in responses]
+
+    def _math_tag_validation_reward(self, completions) -> List[float]:
+        """Reward for proper math tag formatting and content."""
+        def validate_math_tags(text: str) -> float:
+            # Extract all math tags content
+            math_contents = re.findall(r"<math>(.*?)</math>", text)
+            if not math_contents:
+                return 0.0
+                
+            valid_count = 0
+            for content in math_contents:
+                # Allow single letter variables but not multiple consecutive letters
+                if re.search(r'[a-zA-Z]{2,}', content):
+                    continue
+                # Allow numbers, basic math symbols, and single letters
+                if not re.match(r'^[0-9+\-*/()\s.a-zA-Z]+$', content):
+                    continue
+                valid_count += 1
+            
+            # Reward up to 3 valid math tags
+            return min(valid_count, 3)
+            
+        responses = [completion[0]["content"] for completion in completions]
+        return [validate_math_tags(r) for r in responses]
+
+    def _math_tag_presence_reward(self, completions) -> List[float]:
+        """Reward for presence of math tags."""
+        responses = [completion[0]["content"] for completion in completions]
+        return [1.0 if "<math>" in r and "</math>" in r else 0.0 for r in responses]
 
     def compute_rewards(
         self,
@@ -163,7 +194,9 @@ class GSM8kEvaluator(RewardEvaluator):
             self._int_format_reward(completions),
             self._strict_format_reward(completions),
             self._soft_format_reward(completions),
-            self._xml_count_reward(completions)
+            self._xml_count_reward(completions),
+            self._math_tag_validation_reward(completions),
+            self._math_tag_presence_reward(completions)
         ]
         
         # Fill rewards tensor
@@ -184,6 +217,8 @@ class GSM8kEvaluator(RewardEvaluator):
             "rewards/strict_format_reward_func": reward_per_func[2].item(),
             "rewards/soft_format_reward_func": reward_per_func[3].item(),
             "rewards/xmlcount_reward_func": reward_per_func[4].item(),
+            "rewards/math_tag_validation_reward_func": reward_per_func[5].item(),
+            "rewards/math_tag_presence_reward_func": reward_per_func[6].item(),
             "reward": rewards_per_func.sum(dim=1).mean().item(),
             "accuracy": accuracy
         }
@@ -197,5 +232,7 @@ class GSM8kEvaluator(RewardEvaluator):
             'integer_format': reward_scores[1].item(),
             'strict_format': reward_scores[2].item(),
             'soft_format': reward_scores[3].item(),
-            'xml_count': reward_scores[4].item()
+            'xml_count': reward_scores[4].item(),
+            'math_tag_validation': reward_scores[5].item(),
+            'math_tag_presence': reward_scores[6].item()
         }

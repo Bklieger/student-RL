@@ -7,7 +7,7 @@ import torch
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
-
+from rldatasets import SYSTEM_PROMPT
 def load_model_and_tokenizer(model_path: str, device: str):
     """Load model and tokenizer from a saved path."""
     model = AutoModelForCausalLM.from_pretrained(
@@ -26,7 +26,7 @@ def generate_response(model, tokenizer, prompt: str, device: str, max_length: in
     """Generate n responses from the model."""
     # Format prompt
     formatted_prompt = [
-        {'role': 'system', 'content': 'You are a helpful AI assistant.'},
+        {'role': 'system', 'content': SYSTEM_PROMPT},
         {'role': 'user', 'content': prompt}
     ]
     prompt_text = tokenizer.apply_chat_template(formatted_prompt, tokenize=False)
@@ -113,4 +113,4 @@ def main():
 if __name__ == "__main__":
     main() 
 
-# python compare_models.py --output_dir final1 --prompt "Reason about something with the proper format with <reasoning> and <answer>" --output_file results.json --n 10
+# python compare_models.py --output_dir final1 --prompt "What is 823*234?" --output_file results.json --n 3

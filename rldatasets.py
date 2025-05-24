@@ -54,15 +54,17 @@ def extract_hash_answer(text: str) -> str | None:
 
 SYSTEM_PROMPT = """
 Respond in the following format:
-<reasoning>
-...
-</reasoning>
-<answer>
-...
-</answer>
+
+For any mathematical calculations or expressions, use <math> tags.
+<math>2 + 2 = 4</math>
+<math>x + y = 10</math>
+
+Reason step by step, then put your final answer in <answer> tags.
+<answer>44</answer>
+
+Example: What is the sum of 22 and 22?
+Response: We can add the two numbers together with simple addition. <math>22 + 22 = 44</math> Thus, we see that the answer is 44. <answer>44</answer>
 """
-
-
 
 class GSM8KLoader(DataLoader):
     """
@@ -83,21 +85,21 @@ class GSM8KLoader(DataLoader):
         super().__init__(random)
         self.questions = questions
         self.answers = answers
-        self.pre_prompt = """You will be given a question that involves reasoning. You should reason carefully about the question, then provide your answer.
-            It is very important that you put your reasoning process inside <reasoning> tags and your final answer inside <answer> tags, like this:
+        # self.pre_prompt = """You will be given a question that involves reasoning. You should reason carefully about the question, then provide your answer.
+        #     It is very important that you put your reasoning process inside <reasoning> tags and your final answer inside <answer> tags, like this:
 
             
-            <reasoning>
-            Your step-by-step reasoning process here
-            </reasoning>
-            <answer>
-            Your final answer here
-            </answer>
+        #     <reasoning>
+        #     Your step-by-step reasoning process here
+        #     </reasoning>
+        #     <answer>
+        #     Your final answer here
+        #     </answer>
 
-            All of your returned text should either be in the <reasoning> or <answer> tags - no text outside! Start each answer by immediately starting with <reasoning>. 
-            It is is extremely important you answer in this way - do not put any information or text outside of these tags!
+        #     All of your returned text should either be in the <reasoning> or <answer> tags - no text outside! Start each answer by immediately starting with <reasoning>. 
+        #     It is is extremely important you answer in this way - do not put any information or text outside of these tags!
 
-            Question: """
+        #     Question: """
         self.system_prompt = SYSTEM_PROMPT
         
     def __len__(self) -> int:
