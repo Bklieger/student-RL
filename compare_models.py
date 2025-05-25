@@ -72,7 +72,11 @@ def main():
     # Load models
     print("Loading models...")
     original_model_path = os.path.join(args.output_dir, "models", "original_model")
+
+    # try final_model, if not there, use intermediate_model
     final_model_path = os.path.join(args.output_dir, "models", "final_model")
+    if not os.path.exists(final_model_path):
+        final_model_path = os.path.join(args.output_dir, "models", "intermediate_model")
     
     original_model, original_tokenizer = load_model_and_tokenizer(original_model_path, device)
     final_model, final_tokenizer = load_model_and_tokenizer(final_model_path, device)
