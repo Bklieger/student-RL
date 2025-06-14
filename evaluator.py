@@ -101,18 +101,31 @@ class GSM8kEvaluator(RewardEvaluator):
     def _extract_xml_content(self, text: str, tag: str) -> str:
         """Extract content from XML tags."""
         try:
-            content = text.split(f"<{tag}>")[-1]
-            content = content.split(f"</{tag}>")[0]
-            return content.strip()
+            # Find all occurrences of the tag
+            pattern = f"<{tag}>(.*?)</{tag}>"
+            matches = re.findall(pattern, text, re.DOTALL)
+            if not matches:
+                return ""
+            return matches[0].strip()
         except:
             return ""
     
     def _extract_xml_content_with_parent(self, text: str, parenttag: str, tag: str) -> str:
-        """Extract content from XML tags."""
+        """Extract content from XML tags within a parent tag."""
         try:
-            parent_content = text.split(f"<{parenttag}>")[-1]
-            parent_content = parent_content.split(f"</{parenttag}>")[0]
-            return self._extract_xml_content(parent_content, tag)
+            # First find the parent tag content
+            parent_pattern = f"<{parenttag}>(.*?)</{parenttag}>"
+            parent_matches = re.findall(parent_pattern, text, re.DOTALL)
+            if not parent_matches:
+                return ""
+            
+            # Then find the tag within the parent content
+            tag_pattern = f"<{tag}>(.*?)</{tag}>"
+            tag_matches = re.findall(tag_pattern, parent_matches[0], re.DOTALL)
+            if not tag_matches:
+                return ""
+                
+            return tag_matches[0].strip()
         except:
             return ""
 
@@ -129,13 +142,13 @@ class GSM8kEvaluator(RewardEvaluator):
         """Reward for correct answer in solution part."""
         responses = [completion[0]['content'] for completion in completions]
         extracted = [self._extract_solution_answer(r) for r in responses]
-        return [2.0 if r == a else 0.0 for r, a in zip(extracted, answer)]
+        return [4.0 if r == a else 0.0 for r, a in zip(extracted, answer)]
 
     def _incorrectness_reward(self, prompts, completions, answer) -> List[float]:
         """Reward for incorrect answer in student part."""
         responses = [completion[0]['content'] for completion in completions]
         extracted = [self._extract_student_answer(r) for r in responses]
-        return [0.0 if r == a else 1.0 for r, a in zip(extracted, answer)]
+        return [0.0 if r == a or len(r) == 0 else 1.0 for r, a in zip(extracted, answer)]
 
     def _solutions_differ_reward(self, prompts, completions, answer) -> List[float]:
         """Reward for solutions differing in student part."""
@@ -191,28 +204,77 @@ class GSM8kEvaluator(RewardEvaluator):
         return rewards
 
     def _soft_tag_ordering_reward(self, completions) -> List[float]:
-        """Softer reward for tag ordering that allows for more flexibility."""
+        """Softer reward for tag ordering that allows for more flexibility.
+        
+        Rewards:
+        - 3*3.0 points for perfect ordering (solution before student)
+        - 3*2.0 points for having both solution and student tags
+        - 3*1.0 points for having at least one answer tag
+        - 3*0.5 points for having any XML tags
+        - 3*1.0 points for answer tag being inside solution tag
+        - 3*1.0 points for answer tag being inside student tag
+        
+        Penalties:
+        - -3*1.0 points if total content length < 20 characters
+        - -3*1.0 points if solution content length < 10 characters
+        - -3*1.0 points if student content length < 10 characters
+        - -3*1.0 points if answer content length < 3 characters
+        """
         responses = [completion[0]['content'] for completion in completions]
         rewards = []
+        multiplier = 1.5
         
         for response in responses:
-            # Check if solution comes before student
-            solution_pos = response.find("<solution>")
-            student_pos = response.find("<student>")
+            reward = 0.0
             
-            if solution_pos == -1 or student_pos == -1 or solution_pos > student_pos:
-                rewards.append(0.0)
-                continue
+            # Check for any XML tags (0.5 points)
+            if "<" in response and ">" in response:
+                reward += 0.5
+            
+            # Check for answer tags (1.0 points)
+            if "<answer>" in response and "</answer>" in response:
+                reward += 1.0
                 
-            # Check if each part has its answer tag
-            solution_part = response[solution_pos:student_pos]
-            student_part = response[student_pos:]
+                # Check answer content length
+                solution_answer = self._extract_xml_content_with_parent(response, "solution", "answer")
+                student_answer = self._extract_xml_content_with_parent(response, "student", "answer")
+                
+                if len(solution_answer) < 3 or len(student_answer) < 3:
+                    reward -= 1.0
             
-            has_solution_answer = "<answer>" in solution_part and "</answer>" in solution_part
-            has_student_answer = "<answer>" in student_part and "</answer>" in student_part
+            # Check for solution and student tags (2.0 points total)
+            has_solution = "<solution>" in response and "</solution>" in response
+            has_student = "<student>" in response and "</student>" in response
             
-            reward = 1.0 if has_solution_answer and has_student_answer else 0.0
-            rewards.append(reward)
+            if has_solution:
+                reward += 1.0  # Give 1.0 for solution tag
+                
+                # Check solution content length
+                solution_content = self._extract_xml_content(response, "solution")
+                if len(solution_content) < 10:
+                    reward -= 1.0
+                    
+            if has_student:
+                reward += 1.0  # Give 1.0 for student tag
+                
+                # Check student content length
+                student_content = self._extract_xml_content(response, "student")
+                if len(student_content) < 10:
+                    reward -= 1.0
+            
+            # Check for correct ordering (3.0 points)
+            if has_solution and has_student:
+                solution_pos = response.find("<solution>")
+                student_pos = response.find("<student>")
+                if solution_pos < student_pos:
+                    reward += 3.0
+            
+            # Penalty for overall short content
+            if len(response) < 20:
+                reward -= 1.0
+            
+            final_reward = multiplier*reward
+            rewards.append(final_reward)
             
         return rewards
 

@@ -69,19 +69,6 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
-    # Load models
-    print("Loading models...")
-    original_model_path = os.path.join(args.output_dir, "models", "original_model")
-
-    # try final_model, if not there, use intermediate_model
-    final_model_path = os.path.join(args.output_dir, "models", "final_model")
-    if not os.path.exists(final_model_path):
-        final_model_path = os.path.join(args.output_dir, "models", "intermediate_model")
-    
-    original_model, original_tokenizer = load_model_and_tokenizer(original_model_path, device)
-    final_model, final_tokenizer = load_model_and_tokenizer(final_model_path, device)
-    print("Models loaded successfully!")
-    
     # Get prompts
     prompts = []
     if args.prompt:
@@ -96,17 +83,44 @@ def main():
     # Generate and compare responses
     results = []
     for prompt in tqdm(prompts, desc="Generating responses"):
+        result = {"prompt": prompt}
         
-        # Get responses
-        original_responses = generate_response(original_model, original_tokenizer, prompt, device, args.max_length, args.n)
+        # Load original model if it exists
+        original_model_path = os.path.join(args.output_dir, "models", "original_model")
+        if os.path.exists(original_model_path):
+            print("Loading original model...")
+            original_model, original_tokenizer = load_model_and_tokenizer(original_model_path, device)
+            
+            # Get original responses
+            original_responses = generate_response(original_model, original_tokenizer, prompt, device, args.max_length, args.n)
+            result["original_responses"] = original_responses
+            
+            # Clear original model from memory
+            del original_model
+            del original_tokenizer
+            torch.cuda.empty_cache()
+        else:
+            print("Original model not found, skipping...")
+            result["original_responses"] = None
+        
+        # Load final model
+        print("Loading fine-tuned model...")
+        final_model_path = os.path.join(args.output_dir, "models", "intermediate_model")
+        if not os.path.exists(final_model_path):
+            final_model_path = os.path.join(args.output_dir, "models", "intermediate_model")
+        final_model, final_tokenizer = load_model_and_tokenizer(final_model_path, device)
+        
+        # Get fine-tuned responses
         final_responses = generate_response(final_model, final_tokenizer, prompt, device, args.max_length, args.n)
+        result["fine_tuned_responses"] = final_responses
+        
+        # Clear final model from memory
+        del final_model
+        del final_tokenizer
+        torch.cuda.empty_cache()
         
         # Store results
-        results.append({
-            "prompt": prompt,
-            "original_responses": original_responses,
-            "fine_tuned_responses": final_responses
-        })
+        results.append(result)
     
     # Save results if output file specified
     if args.output_file:

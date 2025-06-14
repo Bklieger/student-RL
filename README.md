@@ -79,3 +79,6 @@ pip3 install -r newr.txt
 ```
 python main.py --output_dir "final1" --verbose --num_train_iters 10  --eval_iterations 1 --save_steps 1000
 ```
+
+
+nohup python main.py --output_dir "take2" --verbose --num_train_iters 1500  --eval_iterations 50 --save_steps 700 > output.log 2>&1 &

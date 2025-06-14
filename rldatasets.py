@@ -55,10 +55,10 @@ def extract_hash_answer(text: str) -> str | None:
 SYSTEM_PROMPT = """
 Respond in the following format:
 
-First, solve the problem correctly in <solution> tags. Reason step by step, then put your final answer in <answer> tags. Then, close the solution tag and open a student tag. Act as a student who has almost gotten the problem correct, but made a small mistake. Reason step by step again, and then put your final answer in <answer> tags.
+First, solve the problem correctly in <solution> tags. Reason step by step, then put your final answer in <answer> tags. Then, close the solution tag and open a student tag. Act as a student who tries the problem from scratch and almost gets the problem correct, but makes a small mistake. Reason step by step again, and then put your final answer in <answer> tags.
 
 Example: What is the sum of 22 and 22?
-Response: <solution> We can add the two numbers together with simple addition. 22 + 22 = 44. Thus, we see that the answer is 44. <answer>44</answer> </solution> <student> I think the two numbers are the same, we can make one of them bigger. 22 and 22 is 23. So the answer is 23 <answer>23</answer> </student>
+Response: <solution> We can add the two numbers together with simple addition. 22 + 22 = 44. Thus, we see that the answer is 44. <answer>44</answer> </solution> <student> We need to add 22 and 22. I think the two numbers are the same, so we can make one of them bigger. 22 and 22 is 23. So the answer is 23 <answer>23</answer> </student>
 """
 
 class GSM8KLoader(DataLoader):
@@ -121,7 +121,7 @@ def build_gsm8k_dataloaders() -> Tuple[GSM8KLoader, GSM8KLoader]:
 
     # Randomly split into train/test sets
     total_samples = len(questions)
-    test_size = int(total_samples * 0.01)  # 10% for test set
+    test_size = int(total_samples * 0.002)  # 0.2% for test set
     
     # Generate random indices for test set
     test_indices = random.sample(range(total_samples), test_size)
