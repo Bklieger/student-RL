@@ -64,10 +64,13 @@ def write_generation_log(log_data: Dict[str, Any], log_file: str) -> None:
             
             # Write individual scores
             f.write(f"Correctness: {gen['scores']['correctness']}\n")
-            f.write(f"Integer format: {gen['scores']['integer_format']}\n") 
-            f.write(f"Strict format: {gen['scores']['strict_format']}\n")
-            f.write(f"Soft format: {gen['scores']['soft_format']}\n")
-            f.write(f"XML count: {gen['scores']['xml_count']}\n")
+            f.write(f"Incorrectness: {gen['scores']['incorrectness']}\n")
+            f.write(f"Solutions Differ: {gen['scores']['solutions_differ']}\n")
+            f.write(f"Integer Format (Solution): {gen['scores']['int_format_solution']}\n")
+            f.write(f"Integer Format (Student): {gen['scores']['int_format_student']}\n")
+            f.write(f"Answer Tags One Per Part: {gen['scores']['answer_tags_one_per_part']}\n")
+            f.write(f"Strict Tag Ordering: {gen['scores']['strict_tag_ordering']}\n")
+            f.write(f"Soft Tag Ordering: {gen['scores']['soft_tag_ordering']}\n")
             f.write(f"Total reward: {gen['scores']['total_reward']}\n\n")
 
 

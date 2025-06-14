@@ -96,85 +96,125 @@ class GSM8kEvaluator(RewardEvaluator):
     """
     
     def __init__(self):
-        self.num_reward_functions = 7
+        self.num_reward_functions = 9
+
+    def _extract_xml_content(self, text: str, parenttag: str, tag: str) -> str:
+        """Extract content from XML tags."""
+        try:
+            content = text.split(f"<{tag}>")[-1]
+            content = content.split(f"</{tag}>")[0]
+            return content.strip()
+        except:
+            return ""
     
-    def _extract_xml_answer(self, text: str) -> str:
-        """Extract answer from XML tags."""
-        answer = text.split("<answer>")[-1]
-        answer = answer.split("</answer>")[0]
-        return answer.strip()
-    
+    def _extract_xml_content_with_parent(self, text: str, parenttag: str, tag: str) -> str:
+        """Extract content from XML tags."""
+        try:
+            parent_content = text.split(f"<{parenttag}>")[-1]
+            parent_content = parent_content.split(f"</{parenttag}>")[0]
+            return self._extract_xml_content(parent_content, tag)
+        except:
+            return ""
+
+    def _extract_solution_answer(self, text: str) -> str:
+        """Extract answer from solution part."""
+        return self._extract_xml_content_with_parent(text, "solution", "answer")
+
+    def _extract_student_answer(self, text: str) -> str:
+        """Extract answer from student part."""
+        return self._extract_xml_content_with_parent(text, "student", "answer")
+
+    # === rewards ===
     def _correctness_reward(self, prompts, completions, answer) -> List[float]:
-        """Reward for correct answer."""
+        """Reward for correct answer in solution part."""
         responses = [completion[0]['content'] for completion in completions]
-        extracted = [self._extract_xml_answer(r) for r in responses]
+        extracted = [self._extract_solution_answer(r) for r in responses]
         return [2.0 if r == a else 0.0 for r, a in zip(extracted, answer)]
 
-    def _int_format_reward(self, completions) -> List[float]:
-        """Reward for integer format."""
+    def _incorrectness_reward(self, prompts, completions, answer) -> List[float]:
+        """Reward for incorrect answer in student part."""
         responses = [completion[0]['content'] for completion in completions]
-        extracted = [self._extract_xml_answer(r) for r in responses]
+        extracted = [self._extract_student_answer(r) for r in responses]
+        return [0.0 if r == a else 1.0 for r, a in zip(extracted, answer)]
+
+    def _solutions_differ_reward(self, prompts, completions, answer) -> List[float]:
+        """Reward for solutions differing in student part."""
+        responses = [completion[0]['content'] for completion in completions]
+        extracted_solution = [self._extract_solution_answer(r) for r in responses]
+        extracted_student = [self._extract_student_answer(r) for r in responses]
+        return [0.0 if r == a else 1.0 for r, a in zip(extracted_solution, extracted_student)]
+
+    def _int_format_reward_solution_answer(self, completions) -> List[float]:
+        """Reward for integer format in solution answer."""
+        responses = [completion[0]['content'] for completion in completions]
+        extracted = [self._extract_solution_answer(r) for r in responses]
         return [0.5 if r.isdigit() else 0.0 for r in extracted]
 
-    def _strict_format_reward(self, completions) -> List[float]:
-        """Reward for strict XML format."""
-        pattern = r".*<answer>([0-9+\-*/()\s.]*)</answer>"
-        responses = [completion[0]["content"] for completion in completions]
-        matches = [bool(re.search(pattern, r)) for r in responses]
-        return [0.5 if m else 0.0 for m in matches]
+    def _int_format_reward_student_answer(self, completions) -> List[float]:
+        """Reward for integer format in student answer."""
+        responses = [completion[0]['content'] for completion in completions]
+        extracted = [self._extract_student_answer(r) for r in responses]
+        return [0.5 if r.isdigit() else 0.0 for r in extracted]
 
-    def _soft_format_reward(self, completions) -> List[float]:
-        """Reward for relaxed XML format."""
-        pattern = r".*<answer>.*?</answer>"
-        responses = [completion[0]["content"] for completion in completions]
-        matches = [bool(re.search(pattern, r)) for r in responses]
-        return [0.5 if m else 0.0 for m in matches]
-
-    def _xml_count_reward(self, completions) -> List[float]:
-        """Reward for XML tag counting."""
-        def count_xml(text: str) -> float:
-            count = 0.0
-            if text.count("<math>\n") == 1: count += 0.125
-            if text.count("\n</math>\n") == 1: count += 0.125
-            if text.count("\n<answer>\n") == 1:
-                count += 0.125
-                count -= len(text.split("\n</answer>\n")[-1])*0.001
-            if text.count("\n</answer>") == 1:
-                count += 0.125
-                count -= (len(text.split("\n</answer>")[-1]) - 1)*0.001
-            return count
+    # make sure there are only one pair of answer tags in the solution and student parts
+    def _answer_tags_one_per_part_reward(self, completions) -> List[float]:
+        """Reward for having exactly one pair of answer tags in each part."""
+        responses = [completion[0]['content'] for completion in completions]
+        rewards = []
+        
+        for response in responses:
+            # Count answer tags in solution part
+            solution_part = self._extract_xml_content(response, "solution")
+            solution_answer_tags = len(re.findall(r"<answer>.*?</answer>", solution_part))
             
-        responses = [completion[0]["content"] for completion in completions]
-        return [count_xml(r) for r in responses]
+            # Count answer tags in student part
+            student_part = self._extract_xml_content(response, "student")
+            student_answer_tags = len(re.findall(r"<answer>.*?</answer>", student_part))
+            
+            # Reward if exactly one pair in each part
+            reward = 1.0 if solution_answer_tags == 1 and student_answer_tags == 1 else 0.0
+            rewards.append(reward)
+            
+        return rewards
 
-    def _math_tag_validation_reward(self, completions) -> List[float]:
-        """Reward for proper math tag formatting and content."""
-        def validate_math_tags(text: str) -> float:
-            # Extract all math tags content
-            math_contents = re.findall(r"<math>(.*?)</math>", text)
-            if not math_contents:
-                return 0.0
+    def _strict_tag_ordering_reward(self, completions) -> List[float]:
+        """Strict reward for correct tag ordering and structure."""
+        responses = [completion[0]['content'] for completion in completions]
+        rewards = []
+        
+        for response in responses:
+            # Check for exact pattern: <solution>...<answer>...</answer>...</solution><student>...<answer>...</answer>...</student>
+            pattern = r"^\s*<solution>\s*<answer>.*?</answer>.*?</solution>\s*<student>\s*<answer>.*?</answer>.*?</student>\s*$"
+            reward = 3.0 if re.match(pattern, response, re.DOTALL) else 0.0
+            rewards.append(reward)
+            
+        return rewards
+
+    def _soft_tag_ordering_reward(self, completions) -> List[float]:
+        """Softer reward for tag ordering that allows for more flexibility."""
+        responses = [completion[0]['content'] for completion in completions]
+        rewards = []
+        
+        for response in responses:
+            # Check if solution comes before student
+            solution_pos = response.find("<solution>")
+            student_pos = response.find("<student>")
+            
+            if solution_pos == -1 or student_pos == -1 or solution_pos > student_pos:
+                rewards.append(0.0)
+                continue
                 
-            valid_count = 0
-            for content in math_contents:
-                # Allow single letter variables but not multiple consecutive letters
-                if re.search(r'[a-zA-Z]{2,}', content):
-                    continue
-                # Allow numbers, basic math symbols, and single letters
-                if not re.match(r'^[0-9+\-*/()\s.a-zA-Z]+$', content):
-                    continue
-                valid_count += 1
+            # Check if each part has its answer tag
+            solution_part = response[solution_pos:student_pos]
+            student_part = response[student_pos:]
             
-            # Reward up to 3 valid math tags
-            return min(valid_count, 3)
+            has_solution_answer = "<answer>" in solution_part and "</answer>" in solution_part
+            has_student_answer = "<answer>" in student_part and "</answer>" in student_part
             
-        responses = [completion[0]["content"] for completion in completions]
-        return [validate_math_tags(r) for r in responses]
-
-    def _math_tag_presence_reward(self, completions) -> List[float]:
-        """Reward for presence of math tags."""
-        responses = [completion[0]["content"] for completion in completions]
-        return [1.0 if "<math>" in r and "</math>" in r else 0.0 for r in responses]
+            reward = 1.0 if has_solution_answer and has_student_answer else 0.0
+            rewards.append(reward)
+            
+        return rewards
 
     def compute_rewards(
         self,
@@ -191,12 +231,13 @@ class GSM8kEvaluator(RewardEvaluator):
         # Compute all reward functions
         all_scores = [
             self._correctness_reward(prompts, completions, answer),
-            self._int_format_reward(completions),
-            self._strict_format_reward(completions),
-            self._soft_format_reward(completions),
-            self._xml_count_reward(completions),
-            self._math_tag_validation_reward(completions),
-            self._math_tag_presence_reward(completions)
+            self._incorrectness_reward(prompts, completions, answer),
+            self._solutions_differ_reward(prompts, completions, answer),
+            self._int_format_reward_solution_answer(completions),
+            self._int_format_reward_student_answer(completions),
+            self._answer_tags_one_per_part_reward(completions),
+            self._strict_tag_ordering_reward(completions),
+            self._soft_tag_ordering_reward(completions)
         ]
         
         # Fill rewards tensor
@@ -213,12 +254,13 @@ class GSM8kEvaluator(RewardEvaluator):
         
         metrics = {
             "rewards/correctness_reward_func": reward_per_func[0].item(),
-            "rewards/int_reward_func": reward_per_func[1].item(), 
-            "rewards/strict_format_reward_func": reward_per_func[2].item(),
-            "rewards/soft_format_reward_func": reward_per_func[3].item(),
-            "rewards/xmlcount_reward_func": reward_per_func[4].item(),
-            "rewards/math_tag_validation_reward_func": reward_per_func[5].item(),
-            "rewards/math_tag_presence_reward_func": reward_per_func[6].item(),
+            "rewards/incorrectness_reward_func": reward_per_func[1].item(),
+            "rewards/solutions_differ_reward_func": reward_per_func[2].item(),
+            "rewards/int_format_solution_reward_func": reward_per_func[3].item(),
+            "rewards/int_format_student_reward_func": reward_per_func[4].item(),
+            "rewards/answer_tags_one_per_part_reward_func": reward_per_func[5].item(),
+            "rewards/strict_tag_ordering_reward_func": reward_per_func[6].item(),
+            "rewards/soft_tag_ordering_reward_func": reward_per_func[7].item(),
             "reward": rewards_per_func.sum(dim=1).mean().item(),
             "accuracy": accuracy
         }
@@ -229,10 +271,11 @@ class GSM8kEvaluator(RewardEvaluator):
         """Convert reward scores tensor to labeled dictionary."""
         return {
             'correctness': reward_scores[0].item(),
-            'integer_format': reward_scores[1].item(),
-            'strict_format': reward_scores[2].item(),
-            'soft_format': reward_scores[3].item(),
-            'xml_count': reward_scores[4].item(),
-            'math_tag_validation': reward_scores[5].item(),
-            'math_tag_presence': reward_scores[6].item()
+            'incorrectness': reward_scores[1].item(),
+            'solutions_differ': reward_scores[2].item(),
+            'int_format_solution': reward_scores[3].item(),
+            'int_format_student': reward_scores[4].item(),
+            'answer_tags_one_per_part': reward_scores[5].item(),
+            'strict_tag_ordering': reward_scores[6].item(),
+            'soft_tag_ordering': reward_scores[7].item()
         }

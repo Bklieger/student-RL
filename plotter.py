@@ -42,10 +42,13 @@ def plot_metrics(output_dir):
         # Plot reward metrics
         reward_metrics = [
             'rewards/correctness_reward_func',
-            'rewards/int_reward_func', 
-            'rewards/strict_format_reward_func',
-            'rewards/soft_format_reward_func',
-            'rewards/xmlcount_reward_func',
+            'rewards/incorrectness_reward_func',
+            'rewards/solutions_differ_reward_func',
+            'rewards/int_format_solution_reward_func',
+            'rewards/int_format_student_reward_func',
+            'rewards/answer_tags_one_per_part_reward_func',
+            'rewards/strict_tag_ordering_reward_func',
+            'rewards/soft_tag_ordering_reward_func',
             'reward'
         ]
         
