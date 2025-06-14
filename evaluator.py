@@ -98,7 +98,7 @@ class GSM8kEvaluator(RewardEvaluator):
     def __init__(self):
         self.num_reward_functions = 9
 
-    def _extract_xml_content(self, text: str, parenttag: str, tag: str) -> str:
+    def _extract_xml_content(self, text: str, tag: str) -> str:
         """Extract content from XML tags."""
         try:
             content = text.split(f"<{tag}>")[-1]
